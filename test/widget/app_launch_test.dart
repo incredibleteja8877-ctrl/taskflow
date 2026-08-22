@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskflow/main.dart';
@@ -48,8 +48,10 @@ void main() {
       (tester) async {
     await pumpApp(tester);
     await signIn(tester, TestAccounts.nimbusAdmin);
+    await goToTab(tester, 'Projects');
 
-    expect(find.text('Projects'), findsOneWidget);
+    // Two matches: the AppBar title and the bottom-nav label.
+    expect(find.text('Projects'), findsWidgets);
     expect(find.text('Website Relaunch'), findsOneWidget);
     expect(find.text('Mobile App v2'), findsOneWidget);
 
@@ -66,6 +68,7 @@ void main() {
       (tester) async {
     await pumpApp(tester);
     await signIn(tester, TestAccounts.harborlightAdmin);
+    await goToTab(tester, 'Projects');
 
     expect(find.text('Client Onboarding Revamp'), findsOneWidget);
     expect(find.text('4 tasks'), findsOneWidget);
@@ -75,6 +78,7 @@ void main() {
   testWidgets('an org_admin is offered Edit and Delete', (tester) async {
     await pumpApp(tester);
     await signIn(tester, TestAccounts.nimbusAdmin);
+    await goToTab(tester, 'Projects');
 
     await tester.tap(find.byTooltip('Project actions').first);
     await tester.pumpAndSettle();
@@ -86,6 +90,7 @@ void main() {
   testWidgets('a member is offered Edit but never Delete', (tester) async {
     await pumpApp(tester);
     await signIn(tester, TestAccounts.nimbusMember);
+    await goToTab(tester, 'Projects');
 
     await tester.tap(find.byTooltip('Project actions').first);
     await tester.pumpAndSettle();
@@ -101,6 +106,7 @@ void main() {
   testWidgets('creating a project adds it to the list', (tester) async {
     await pumpApp(tester);
     await signIn(tester, TestAccounts.nimbusAdmin);
+    await goToTab(tester, 'Projects');
 
     await tester.tap(find.text('New project'));
     await tester.pumpAndSettle();
@@ -116,6 +122,7 @@ void main() {
   testWidgets('the create form refuses an empty name', (tester) async {
     await pumpApp(tester);
     await signIn(tester, TestAccounts.nimbusAdmin);
+    await goToTab(tester, 'Projects');
 
     await tester.tap(find.text('New project'));
     await tester.pumpAndSettle();
@@ -130,6 +137,7 @@ void main() {
       (tester) async {
     await pumpApp(tester);
     await signIn(tester, TestAccounts.nimbusAdmin);
+    await goToTab(tester, 'Projects');
 
     await tester.tap(find.byTooltip('Project actions').first);
     await tester.pumpAndSettle();
@@ -147,6 +155,7 @@ void main() {
   testWidgets('confirming the dialog removes the project', (tester) async {
     await pumpApp(tester);
     await signIn(tester, TestAccounts.nimbusAdmin);
+    await goToTab(tester, 'Projects');
 
     await tester.tap(find.byTooltip('Project actions').first);
     await tester.pumpAndSettle();
@@ -162,6 +171,7 @@ void main() {
   testWidgets('signing out returns to the login screen', (tester) async {
     await pumpApp(tester);
     await signIn(tester, TestAccounts.nimbusAdmin);
+    await goToTab(tester, 'Projects');
     expect(find.text('Website Relaunch'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Sign out'));
@@ -171,3 +181,4 @@ void main() {
     expect(find.text('Website Relaunch'), findsNothing);
   });
 }
+

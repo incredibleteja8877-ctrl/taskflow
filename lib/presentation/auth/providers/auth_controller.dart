@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/di/providers.dart';
 import '../../../domain/entities/auth_session.dart';
+import '../../../domain/entities/organization.dart';
 import '../../../domain/repositories/auth_repository.dart';
 
 /// The signed-in session, or null.
@@ -85,3 +86,12 @@ final isAdminProvider = Provider<bool>(
 final currentOrgIdProvider = Provider<String?>(
   (ref) => ref.watch(currentSessionProvider)?.orgId,
 );
+
+/// The organization record itself, for showing its name in the UI.
+final currentOrganizationProvider = FutureProvider<Organization?>((ref) async {
+  final session = ref.watch(currentSessionProvider);
+  if (session == null) return null;
+  return ref
+      .read(organizationRepositoryProvider)
+      .getOrganization(session.orgId);
+});

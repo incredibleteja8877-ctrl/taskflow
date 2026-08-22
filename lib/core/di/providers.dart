@@ -11,6 +11,7 @@ import '../../domain/repositories/organization_repository.dart';
 import '../../domain/repositories/project_repository.dart';
 import '../../domain/repositories/task_repository.dart';
 import '../../domain/usecases/project_usecases.dart';
+import '../../domain/usecases/task_usecases.dart';
 import '../network/mock_api_config.dart';
 
 /// The simulated-network switches, as mutable app state.
@@ -109,6 +110,14 @@ final organizationRepositoryProvider = Provider<OrganizationRepository>(
 
 final projectUseCasesProvider = Provider<ProjectUseCases>(
   (ref) => ProjectUseCases(
+    projects: ref.watch(projectRepositoryProvider),
+    organizations: ref.watch(organizationRepositoryProvider),
+  ),
+);
+
+final taskUseCasesProvider = Provider<TaskUseCases>(
+  (ref) => TaskUseCases(
+    tasks: ref.watch(taskRepositoryProvider),
     projects: ref.watch(projectRepositoryProvider),
     organizations: ref.watch(organizationRepositoryProvider),
   ),

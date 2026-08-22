@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/error/app_exception.dart';
 import '../../../domain/entities/project.dart';
 import '../../auth/providers/auth_controller.dart';
@@ -41,7 +43,7 @@ class ProjectsScreen extends ConsumerWidget {
         // Task 06's five states, all handled here and nowhere else.
         child: projects.when(
           loading: () => const LoadingView(message: 'Loading projects…'),
-          error: (error, _) => _PullableCenter(
+          error: (error, _) => PullableCenter(
             child: ErrorView(
               error: error,
               onRetry: () => ref.read(projectListProvider.notifier).retry(),
@@ -52,7 +54,7 @@ class ProjectsScreen extends ConsumerWidget {
             // A separate flag could drift out of sync with the list; this
             // cannot.
             if (items.isEmpty) {
-              return _PullableCenter(
+              return PullableCenter(
                 child: EmptyView(
                   icon: Icons.folder_open_outlined,
                   title: 'No projects yet',
@@ -79,6 +81,7 @@ class ProjectsScreen extends ConsumerWidget {
                 final project = items[index];
                 return ProjectCard(
                   project: project,
+                  onTap: () => context.push(Routes.projectDetail(project.id)),
                   onEdit: () =>
                       ProjectFormSheet.show(context, project: project),
                   // Non-admins are not offered the action at all. The usecase
@@ -126,27 +129,3 @@ class ProjectsScreen extends ConsumerWidget {
   }
 }
 
-/// Wraps a centred widget in a scrollable so RefreshIndicator still works.
-///
-/// Without this, pulling down on the empty or error state does nothing —
-/// which is precisely the moment a user most wants to retry. The
-/// ConstrainedBox keeps the child vertically centred rather than pinned to
-/// the top of a very short scroll view.
-class _PullableCenter extends StatelessWidget {
-  const _PullableCenter({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: child,
-        ),
-      ),
-    );
-  }
-}

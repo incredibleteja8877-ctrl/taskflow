@@ -147,6 +147,31 @@ class ErrorView extends StatelessWidget {
   }
 }
 
+/// Wraps a centred widget in a scrollable so RefreshIndicator still works.
+///
+/// Without this, pulling down on an empty or error state does nothing — which
+/// is precisely the moment a user most wants to retry. The ConstrainedBox
+/// keeps the child vertically centred rather than pinned to the top of a very
+/// short scroll view.
+class PullableCenter extends StatelessWidget {
+  const PullableCenter({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 /// A thin banner shown above stale content while offline.
 /// Task 08: "clearly indicate when displayed data may be stale".
 class OfflineBanner extends StatelessWidget {

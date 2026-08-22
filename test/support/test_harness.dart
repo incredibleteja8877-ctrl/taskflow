@@ -96,6 +96,12 @@ Future<void> signIn(
   await tester.pumpAndSettle();
 }
 
+/// Switches to a bottom-nav tab by its label.
+Future<void> goToTab(WidgetTester tester, String label) async {
+  await tester.tap(find.text(label));
+  await tester.pumpAndSettle();
+}
+
 /// The four accounts from `auth_mock.test_credentials`.
 abstract final class TestAccounts {
   static const String nimbusAdmin = 'ava.admin@nimbusdigital.test';
