@@ -395,8 +395,8 @@ Offline is asymmetric, matching how real offline-first apps work:
 ## Testing
 
 ```bash
-flutter test                    # 104 unit + widget tests, ~25 s, no device
-flutter test integration_test   # 5 integration tests, needs a device
+flutter test                    # 104 unit + widget tests, ~35 s, no device
+flutter test integration_test   # one end-to-end flow (~50s), needs a device
 ```
 
 | Suite | File | Covers |
@@ -409,7 +409,7 @@ flutter test integration_test   # 5 integration tests, needs a device
 | Validation | `test/unit/validators_test.dart` | email, password, confirmation, name, non-empty |
 | App + projects | `test/widget/app_launch_test.dart` | splash → login redirect, form validation, sign-in, org-scoped list, admin vs member menus, create, delete with confirmation, sign-out |
 | Tasks | `test/widget/task_screens_test.dart` | list rendering in **loading / empty / error / success**, status update UI, priority update UI, assign and unassign, the picker excluding other orgs, project details |
-| Integration | `integration_test/app_test.dart` | login flow, project listing, task listing, create/update task, task assignment — against the real `main()` |
+| Integration | `integration_test/app_test.dart` | login flow, project listing, task listing, create/update task and task assignment — one end-to-end journey against the real `main()`, nothing mocked |
 
 Tests do not depend on execution order and never touch a network. Each widget
 test boots a fresh `ProviderScope`.

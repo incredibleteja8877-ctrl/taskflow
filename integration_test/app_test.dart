@@ -3,13 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:taskflow/main.dart' as app;
 
-/// Task 11's required integration tests, run against the real app on a
-/// device: login, project listing, task listing, create/update task, and
-/// task assignment.
+/// Task 11's required integration coverage, against the real app on a device:
+/// login flow, project listing, task listing, create/update task, and task
+/// assignment.
 ///
-/// Unlike the widget tests these boot `main()` itself, so nothing is mocked —
-/// real secure storage, real SharedPreferences, the real asset bundle. That
-/// is the point: it proves the wiring holds outside a test harness.
+/// Deliberately ONE test that walks the whole journey rather than five
+/// separate ones. `app.main()` calls `runApp`, and calling it repeatedly in a
+/// single process stacks app instances so finders match stale trees.
+///
+/// Nothing here is mocked: real secure storage, real SharedPreferences, the
+/// real asset bundle, and a real 300-800ms delay on every call.
 ///
 /// Run with:  flutter test integration_test
 void main() {
@@ -18,131 +21,185 @@ void main() {
   const admin = 'ava.admin@nimbusdigital.test';
   const password = 'Password123!';
 
-  /// Boots the app and gets to a signed-out state.
-  ///
-  /// A previous run may have left a session in the Keystore, so we cannot
-  /// assume we start at Login. Tests that depend on execution order are
-  /// explicitly disallowed by the brief.
-  Future<void> startSignedOut(WidgetTester tester) async {
-    await app.main();
-    await tester.pumpAndSettle(const Duration(seconds: 5));
+  testWidgets('login, projects, tasks, create, update and assign',
+      (tester) async {
+    // NOTE: pumpAndSettle's FIRST argument is the interval between frames,
+    // not a timeout. It also only waits for frames — during a Future.delayed
+    // no frame is scheduled, so it returns while async work is still in
+    // flight. Hence waitUntil below for anything that crosses the data layer.
+    Future<void> pump() => tester.pumpAndSettle();
 
-    if (find.text('Welcome back').evaluate().isEmpty) {
-      await tester.tap(find.text('Profile'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Sign out'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
-      await tester.pumpAndSettle(const Duration(seconds: 5));
+    bool sees(Finder finder) => finder.evaluate().isNotEmpty;
+
+    /// Pumps until [ready] holds, or fails with a useful message.
+    ///
+    /// This is what makes the test reliable against a real 300-800ms mock
+    /// latency without sprinkling arbitrary sleeps everywhere.
+    Future<void> waitUntil(
+      bool Function() ready, {
+      required String describe,
+      Duration timeout = const Duration(seconds: 30),
+    }) async {
+      final deadline = DateTime.now().add(timeout);
+      while (DateTime.now().isBefore(deadline)) {
+        if (ready()) return;
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      fail('Timed out after $timeout waiting for $describe');
     }
 
+    /// Scrolls the primary list until [target] is built and on screen.
+    ///
+    /// A phone shows about four cards at once, and `find.text` only matches
+    /// widgets that exist — so an item further down a perfectly correct list
+    /// would otherwise fail the test for being off-screen.
+    Future<void> scrollTo(Finder target) async {
+      if (sees(target)) return;
+      await tester.scrollUntilVisible(
+        target,
+        250,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 60,
+      );
+      await pump();
+    }
+
+    /// Bottom-nav tabs are found by icon, not label: icons are unambiguous,
+    /// whereas "Tasks" and "Projects" also appear as AppBar titles.
+    Future<void> goToTab(IconData outlined, IconData filled) async {
+      final tab = sees(find.byIcon(outlined))
+          ? find.byIcon(outlined)
+          : find.byIcon(filled);
+      await tester.tap(tab.first);
+      await pump();
+    }
+
+    // ------------------------------------------------------------- boot
+    await app.main();
+    await pump();
+
+    // A previous run may have left a session in the Keystore, so we cannot
+    // assume we start at Login. Sign out via the Projects AppBar icon, which
+    // is always on screen (the Profile button is below the fold on a phone).
+    await waitUntil(
+      () => sees(find.text('Welcome back')) || sees(find.byIcon(Icons.home)),
+      describe: 'the app to finish its session check',
+    );
+    if (!sees(find.text('Welcome back'))) {
+      await goToTab(Icons.folder_outlined, Icons.folder);
+      await tester.tap(find.byTooltip('Sign out'));
+      await waitUntil(
+        () => sees(find.text('Welcome back')),
+        describe: 'sign out to return to Login',
+      );
+    }
     expect(find.text('Welcome back'), findsOneWidget);
-  }
 
-  Future<void> signIn(WidgetTester tester) async {
-    await tester.enterText(find.byType(TextFormField).first, admin);
-    await tester.enterText(find.byType(TextFormField).last, password);
-    await tester.tap(find.text('Sign in'));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-  }
-
-  Future<void> goToTab(WidgetTester tester, String label) async {
-    await tester.tap(find.text(label));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-  }
-
-  testWidgets('login flow against the mock credentials', (tester) async {
-    await startSignedOut(tester);
-
-    // Bad password first: the app must reject it and stay put.
+    // -------------------------------------------------- login: bad password
     await tester.enterText(find.byType(TextFormField).first, admin);
     await tester.enterText(find.byType(TextFormField).last, 'Wrong123!');
+    await pump();
     await tester.tap(find.text('Sign in'));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-    expect(find.text('Welcome back'), findsOneWidget);
+    await waitUntil(
+      () => sees(find.text('Incorrect email or password.')),
+      describe: 'the wrong-password error',
+    );
+    expect(
+      find.text('Welcome back'),
+      findsOneWidget,
+      reason: 'a wrong password must not get past Login',
+    );
 
-    await signIn(tester);
-    expect(find.text('Home'), findsWidgets);
-  });
+    // ------------------------------------------------- login: real password
+    await tester.enterText(find.byType(TextFormField).first, admin);
+    await tester.enterText(find.byType(TextFormField).last, password);
+    await pump();
+    await tester.tap(find.text('Sign in'));
+    await waitUntil(
+      () => !sees(find.text('Welcome back')),
+      describe: 'the router redirect after a successful login',
+    );
+    await pump();
 
-  testWidgets('project listing is scoped to the org', (tester) async {
-    await startSignedOut(tester);
-    await signIn(tester);
-    await goToTab(tester, 'Projects');
+    // --------------------------------------------------- project listing
+    await goToTab(Icons.folder_outlined, Icons.folder);
+    await waitUntil(
+      () => sees(find.text('Website Relaunch')),
+      describe: 'the project list to load',
+    );
 
-    expect(find.text('Website Relaunch'), findsOneWidget);
+    await scrollTo(find.text('Mobile App v2'));
     expect(find.text('Mobile App v2'), findsOneWidget);
-    expect(find.text('Client Onboarding Revamp'), findsNothing);
-  });
+    expect(
+      find.text('Client Onboarding Revamp'),
+      findsNothing,
+      reason: 'a project from another organization must never appear',
+    );
 
-  testWidgets('task listing shows the org\'s tasks', (tester) async {
-    await startSignedOut(tester);
-    await signIn(tester);
-    await goToTab(tester, 'Tasks');
+    // ------------------------------------------------------ task listing
+    await goToTab(Icons.checklist_outlined, Icons.checklist);
+    await waitUntil(
+      () => sees(find.text('Fix broken contact form')),
+      describe: 'the task list to load',
+    );
 
+    await scrollTo(find.text('Build responsive nav component'));
     expect(find.text('Build responsive nav component'), findsOneWidget);
     expect(find.text('Draft onboarding checklist'), findsNothing);
-  });
 
-  testWidgets('create then update a task', (tester) async {
-    await startSignedOut(tester);
-    await signIn(tester);
-    await goToTab(tester, 'Tasks');
-
+    // ------------------------------------------------------- create a task
     await tester.tap(find.text('New task'));
-    await tester.pumpAndSettle();
-
+    await pump();
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Title'),
       'Integration test task',
     );
+    await pump();
     await tester.tap(find.text('Create task'));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
+    await waitUntil(
+      () => !sees(find.text('Create task')),
+      describe: 'the create sheet to close after saving',
+    );
+    await pump();
 
+    // New tasks land at the end of the list.
+    await scrollTo(find.text('Integration test task'));
     expect(find.text('Integration test task'), findsOneWidget);
 
-    // Update its status from the detail screen.
+    // -------------------------------------------------- update its status
     await tester.tap(find.text('Integration test task'));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
+    await waitUntil(
+      () => sees(find.widgetWithText(ChoiceChip, 'In progress')),
+      describe: 'the task detail screen to load',
+    );
 
+    await scrollTo(find.widgetWithText(ChoiceChip, 'In progress'));
     await tester.tap(find.widgetWithText(ChoiceChip, 'In progress'));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-
-    expect(
-      tester
-          .widget<ChoiceChip>(
-            find.widgetWithText(ChoiceChip, 'In progress'),
-          )
-          .selected,
-      isTrue,
+    await waitUntil(
+      () {
+        final chip = find.widgetWithText(ChoiceChip, 'In progress');
+        return sees(chip) && tester.widget<ChoiceChip>(chip).selected;
+      },
+      describe: 'the status chip to become selected',
     );
-  });
 
-  testWidgets('assign and unassign a user', (tester) async {
-    await startSignedOut(tester);
-    await signIn(tester);
-    await goToTab(tester, 'Tasks');
-
-    await tester.tap(find.text('New task'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Title'),
-      'Assignment test task',
-    );
-    await tester.tap(find.text('Create task'));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-
-    await tester.tap(find.text('Assignment test task'));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-
+    // ------------------------------------------------ assign and unassign
+    await scrollTo(find.widgetWithText(ActionChip, 'Marcus Lee'));
     expect(find.text('Unassigned'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ActionChip, 'Marcus Lee'));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-    expect(find.text('Unassign'), findsOneWidget);
+    await waitUntil(
+      () => sees(find.text('Unassign')),
+      describe: 'the task to become assigned',
+    );
 
     await tester.tap(find.text('Unassign'));
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-    expect(find.text('Unassigned'), findsOneWidget);
+    await waitUntil(
+      () => sees(find.text('Unassigned')),
+      describe: 'the task to become unassigned again',
+    );
+
+    // Harborlight's people are never offered in a Nimbus session.
+    expect(find.widgetWithText(ActionChip, 'Elena Vargas'), findsNothing);
   });
 }
