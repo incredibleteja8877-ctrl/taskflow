@@ -6,7 +6,11 @@ plugins {
 
 android {
     namespace = "com.saiteja.taskflow"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_secure_storage 11 requires compiling against Android SDK 37.
+    // The SDK installs it as "android-37.0" under Android's new minor-version
+    // scheme, so compileSdkMinor is needed for AGP to find it.
+    compileSdk = 37
+    compileSdkMinor = 0
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
