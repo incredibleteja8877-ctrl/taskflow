@@ -13,6 +13,7 @@ import '../../presentation/projects/screens/project_detail_screen.dart';
 import '../../presentation/projects/screens/projects_screen.dart';
 import '../../presentation/shared/widgets/app_shell.dart';
 import '../../presentation/tasks/screens/task_detail_screen.dart';
+import '../../presentation/tasks/screens/task_form_screen.dart';
 import '../../presentation/tasks/screens/task_list_screen.dart';
 
 /// Every route path in one place, so no screen hardcodes a string.
@@ -31,10 +32,17 @@ abstract final class Routes {
   // Singular prefixes on purpose: '/project/:id' cannot collide with the
   // '/projects' branch.
   static const String projectDetailPattern = '/project/:projectId';
+  static const String taskNewPattern = '/task/new';
+  static const String taskEditPattern = '/task/:taskId/edit';
   static const String taskDetailPattern = '/task/:taskId';
 
   static String projectDetail(String projectId) => '/project/$projectId';
   static String taskDetail(String taskId) => '/task/$taskId';
+
+  static String taskNew({String? projectId}) =>
+      projectId == null ? taskNewPattern : '$taskNewPattern?projectId=$projectId';
+
+  static String taskEdit(String taskId) => '/task/$taskId/edit';
 
   static bool isAuthScreen(String location) =>
       location == login || location == register;
@@ -113,6 +121,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => ProjectDetailScreen(
           projectId: state.pathParameters['projectId']!,
+        ),
+      ),
+      // Declared BEFORE '/task/:taskId', because go_router matches in order
+      // and '/task/new' would otherwise be read as a task whose id is "new".
+      GoRoute(
+        path: Routes.taskNewPattern,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => TaskFormScreen(
+          projectId: state.uri.queryParameters['projectId'],
+        ),
+      ),
+      GoRoute(
+        path: Routes.taskEditPattern,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => TaskFormScreen(
+          taskId: state.pathParameters['taskId'],
         ),
       ),
       GoRoute(

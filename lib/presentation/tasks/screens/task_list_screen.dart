@@ -10,7 +10,7 @@ import '../../shared/widgets/state_views.dart';
 import '../providers/task_providers.dart';
 import '../widgets/task_card.dart';
 import '../widgets/task_filter_sheet.dart';
-import '../widgets/task_form_sheet.dart';
+
 
 /// Task 04's task list: title, priority, status, assignee, due date, plus
 /// filters and the full set of loading/empty/error states.
@@ -45,7 +45,7 @@ class TaskListScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => TaskFormSheet.show(context),
+        onPressed: () => context.push(Routes.taskNew()),
         icon: const Icon(Icons.add),
         label: const Text('New task'),
       ),
@@ -83,7 +83,7 @@ class TaskListScreen extends ConsumerWidget {
                         onAction: filter.isActive
                             ? () =>
                                 ref.read(taskFilterProvider.notifier).clear()
-                            : () => TaskFormSheet.show(context),
+                            : () => context.push(Routes.taskNew()),
                       ),
                     );
                   }

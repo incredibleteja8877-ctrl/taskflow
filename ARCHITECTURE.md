@@ -377,12 +377,18 @@ StatefulShellRoute  (AppShell: bottom nav + offline banner)
   └── /profile       Profile / Settings / debug toggles
 
 /project/:projectId   Project details   ← pushed on the ROOT navigator
+/task/new             Create task       ← pushed on the ROOT navigator
+/task/:taskId/edit    Edit task         ← pushed on the ROOT navigator
 /task/:taskId         Task details      ← pushed on the ROOT navigator
 ```
 
 Detail routes sit on the root navigator so they cover the bottom bar, the way
 native apps behave. Singular path prefixes (`/project/…` vs the `/projects`
 branch) keep them from colliding.
+
+`/task/new` is declared **before** `/task/:taskId`, because go_router matches
+routes in declaration order — otherwise "new" would be read as a task id and
+the create screen would try to load a task that does not exist.
 
 ### The guard
 

@@ -14,7 +14,7 @@ import '../../shared/widgets/confirm_dialog.dart';
 import '../../shared/widgets/state_views.dart';
 import '../../tasks/providers/task_providers.dart';
 import '../../tasks/widgets/task_card.dart';
-import '../../tasks/widgets/task_form_sheet.dart';
+
 import '../providers/project_detail_provider.dart';
 import '../providers/project_list_controller.dart';
 import '../widgets/project_form_sheet.dart';
@@ -64,7 +64,7 @@ class ProjectDetailScreen extends ConsumerWidget {
       floatingActionButton: project.hasValue
           ? FloatingActionButton.extended(
               onPressed: () =>
-                  TaskFormSheet.show(context, fixedProjectId: projectId),
+                  context.push(Routes.taskNew(projectId: projectId)),
               icon: const Icon(Icons.add),
               label: const Text('New task'),
             )

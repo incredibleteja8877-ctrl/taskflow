@@ -12,9 +12,10 @@ import '../../projects/providers/project_list_controller.dart';
 import '../../shared/task_display.dart';
 import '../../shared/widgets/confirm_dialog.dart';
 import '../../shared/widgets/state_views.dart';
+import '../../../core/router/app_router.dart';
 import '../../shared/widgets/task_chips.dart';
 import '../providers/task_providers.dart';
-import '../widgets/task_form_sheet.dart';
+
 
 /// Task Details (Tasks 04 and 05): view everything, change status and
 /// priority inline, assign or unassign, edit, delete.
@@ -36,7 +37,7 @@ class TaskDetailScreen extends ConsumerWidget {
               tooltip: 'Edit task',
               icon: const Icon(Icons.edit_outlined),
               onPressed: () =>
-                  TaskFormSheet.show(context, task: task.requireValue),
+                  context.push(Routes.taskEdit(taskId)),
             ),
             IconButton(
               tooltip: 'Delete task',
