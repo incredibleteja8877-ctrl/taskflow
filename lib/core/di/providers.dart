@@ -10,6 +10,7 @@ import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/organization_repository.dart';
 import '../../domain/repositories/project_repository.dart';
 import '../../domain/repositories/task_repository.dart';
+import '../../domain/usecases/project_usecases.dart';
 import '../network/mock_api_config.dart';
 
 /// The simulated-network switches, as mutable app state.
@@ -98,5 +99,17 @@ final projectRepositoryProvider = Provider<ProjectRepository>(
 final organizationRepositoryProvider = Provider<OrganizationRepository>(
   (ref) => OrganizationRepositoryImpl(
     dataSource: ref.watch(mockJsonDataSourceProvider),
+  ),
+);
+
+// --------------------------------------------------------------------------
+// Usecases — the business-rule layer. Providers talk to these, never straight
+// to a repository, so no screen can bypass an authorization check.
+// --------------------------------------------------------------------------
+
+final projectUseCasesProvider = Provider<ProjectUseCases>(
+  (ref) => ProjectUseCases(
+    projects: ref.watch(projectRepositoryProvider),
+    organizations: ref.watch(organizationRepositoryProvider),
   ),
 );
