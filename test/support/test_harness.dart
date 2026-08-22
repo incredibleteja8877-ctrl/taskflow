@@ -58,8 +58,19 @@ List<Override> testOverrides({MockApiConfig config = MockApiConfig.instant}) {
     sessionStorageProvider.overrideWithValue(InMemorySessionStorage()),
     localCacheProvider.overrideWithValue(InMemoryLocalCache()),
     mockApiConfigProvider.overrideWith(() => _FixedConfig(config)),
-    mockJsonDataSourceProvider
-        .overrideWithValue(createTestDataSource(config: config)),
+    // overrideWith, not overrideWithValue: the real provider pushes config
+    // changes into the existing data source via ref.listen, and a value
+    // override would skip that — so flipping a debug toggle in a test would
+    // silently do nothing.
+    mockJsonDataSourceProvider.overrideWith((ref) {
+      final dataSource =
+          createTestDataSource(config: ref.read(mockApiConfigProvider));
+      ref.listen<MockApiConfig>(
+        mockApiConfigProvider,
+        (_, next) => dataSource.config = next,
+      );
+      return dataSource;
+    }),
   ];
 }
 
@@ -72,19 +83,48 @@ class _FixedConfig extends MockApiConfigNotifier {
   MockApiConfig build() => _initial;
 }
 
+/// The app wrapped in a test ProviderScope, un-pumped.
+Widget buildApp({MockApiConfig config = MockApiConfig.instant}) {
+  return ProviderScope(
+    overrides: testOverrides(config: config),
+    child: const TaskFlowApp(),
+  );
+}
+
 /// Boots the real app with the test overrides applied and settles the splash.
+///
+/// The surface is deliberately tall. The default 800x600 test viewport cannot
+/// fit eleven task cards, and `find.text` only matches widgets that were
+/// actually built — so a correct list would fail the test purely for being
+/// off-screen. A tall surface tests the content rather than the scroll offset.
 Future<void> pumpApp(
   WidgetTester tester, {
   MockApiConfig config = MockApiConfig.instant,
+  Size surfaceSize = const Size(1000, 3000),
 }) async {
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: testOverrides(config: config),
-      child: const TaskFlowApp(),
-    ),
-  );
+  tester.view.physicalSize = surfaceSize;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(buildApp(config: config));
   await tester.pumpAndSettle();
 }
+
+/// The running app's ProviderContainer, for poking at state from a test.
+ProviderContainer containerOf(WidgetTester tester) =>
+    ProviderScope.containerOf(tester.element(find.byType(TaskFlowApp)));
+
+/// Flips the debug switches a reviewer would use on the Profile screen.
+void setOffline(WidgetTester tester, bool value) =>
+    containerOf(tester).read(mockApiConfigProvider.notifier).setOffline(value);
+
+void setForceServerError(WidgetTester tester, bool value) => containerOf(tester)
+    .read(mockApiConfigProvider.notifier)
+    .setForceServerError(value);
+
+void setForceTimeout(WidgetTester tester, bool value) => containerOf(tester)
+    .read(mockApiConfigProvider.notifier)
+    .setForceTimeout(value);
 
 /// Fills the login form and submits it.
 Future<void> signIn(
