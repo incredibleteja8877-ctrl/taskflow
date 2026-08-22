@@ -42,7 +42,7 @@ class _RouterRefresh extends ChangeNotifier {
 /// EVERY navigation, including deep links and browser back — which is exactly
 /// why a guard belongs here rather than in each screen's initState.
 final routerProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: Routes.splash,
     refreshListenable: ref.watch(_routerRefreshProvider),
     debugLogDiagnostics: kDebugMode,
@@ -87,4 +87,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  // GoRouter holds listeners and a route-information provider. Without this
+  // the instance outlives its ProviderScope — a leak in the app, and in tests
+  // a stale router keeps scheduling frames so pumpAndSettle never settles.
+  ref.onDispose(router.dispose);
+
+  return router;
 });

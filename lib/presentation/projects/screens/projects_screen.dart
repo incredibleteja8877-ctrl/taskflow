@@ -2,19 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/error/app_exception.dart';
+import '../../../domain/entities/project.dart';
 import '../../auth/providers/auth_controller.dart';
+import '../../shared/widgets/confirm_dialog.dart';
+import '../../shared/widgets/state_views.dart';
+import '../providers/project_list_controller.dart';
+import '../widgets/project_card.dart';
+import '../widgets/project_form_sheet.dart';
 
-/// TEMPORARY placeholder so the app runs end to end.
-///
-/// Replaced in the Projects lesson with the real list: pull-to-refresh,
-/// loading/empty/error states, and create/edit/delete.
 class ProjectsScreen extends ConsumerWidget {
   const ProjectsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(currentSessionProvider);
-    final theme = Theme.of(context);
+    final projects = ref.watch(projectListProvider);
+    final isAdmin = ref.watch(isAdminProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -28,57 +31,121 @@ class ProjectsScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.page),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Signed in', style: theme.textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.md),
-            _Row(label: 'Name', value: session?.user.name ?? '—'),
-            _Row(label: 'Email', value: session?.user.email ?? '—'),
-            _Row(label: 'Org', value: session?.orgId ?? '—'),
-            _Row(
-              label: 'Role',
-              value: session == null
-                  ? '—'
-                  : (session.isAdmin ? 'org_admin' : 'member'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => ProjectFormSheet.show(context),
+        icon: const Icon(Icons.add),
+        label: const Text('New project'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => ref.read(projectListProvider.notifier).refresh(),
+        // Task 06's five states, all handled here and nowhere else.
+        child: projects.when(
+          loading: () => const LoadingView(message: 'Loading projects…'),
+          error: (error, _) => _PullableCenter(
+            child: ErrorView(
+              error: error,
+              onRetry: () => ref.read(projectListProvider.notifier).retry(),
             ),
-            _Row(
-              label: 'Token expires',
-              value: session == null
-                  ? '—'
-                  : session.tokens.accessTokenExpiresAt.toLocal().toString(),
-            ),
-          ],
+          ),
+          data: (items) {
+            // `empty` is DERIVED from the data, not stored as its own state.
+            // A separate flag could drift out of sync with the list; this
+            // cannot.
+            if (items.isEmpty) {
+              return _PullableCenter(
+                child: EmptyView(
+                  icon: Icons.folder_open_outlined,
+                  title: 'No projects yet',
+                  message: 'Create your first project to start tracking work.',
+                  actionLabel: 'New project',
+                  onAction: () => ProjectFormSheet.show(context),
+                ),
+              );
+            }
+
+            return ListView.separated(
+              // Required so a short list can still be pulled down to refresh.
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.page,
+                AppSpacing.page,
+                AppSpacing.page,
+                // Extra bottom room so the FAB never covers the last card.
+                96,
+              ),
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final project = items[index];
+                return ProjectCard(
+                  project: project,
+                  onEdit: () =>
+                      ProjectFormSheet.show(context, project: project),
+                  // Non-admins are not offered the action at all. The usecase
+                  // refuses it regardless — this only avoids showing a button
+                  // that would fail.
+                  onDelete: isAdmin
+                      ? () => _confirmDelete(context, ref, project)
+                      : null,
+                );
+              },
+            );
+          },
         ),
       ),
     );
   }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    Project project,
+  ) async {
+    // Captured before the FIRST await. Once any await has run, `context` is
+    // suspect for the rest of the method — the widget may already be gone.
+    // That is what use_build_context_synchronously warns about.
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await ConfirmDialog.confirmed(
+      context,
+      title: 'Delete project?',
+      message: '"${project.name}" and its '
+          '${project.taskCount == 1 ? '1 task' : '${project.taskCount} tasks'} '
+          'will be removed. This cannot be undone.',
+    );
+    if (!confirmed) return;
+
+    try {
+      await ref.read(projectListProvider.notifier).deleteProject(project.id);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Deleted "${project.name}".')),
+      );
+    } on AppException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
 }
 
-class _Row extends StatelessWidget {
-  const _Row({required this.label, required this.value});
+/// Wraps a centred widget in a scrollable so RefreshIndicator still works.
+///
+/// Without this, pulling down on the empty or error state does nothing —
+/// which is precisely the moment a user most wants to retry. The
+/// ConstrainedBox keeps the child vertically centred rather than pinned to
+/// the top of a very short scroll view.
+class _PullableCenter extends StatelessWidget {
+  const _PullableCenter({required this.child});
 
-  final String label;
-  final String value;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: child,
+        ),
       ),
     );
   }
