@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskflow/core/di/providers.dart';
 import 'package:taskflow/core/network/mock_api_config.dart';
+import 'package:taskflow/data/datasources/local_cache.dart';
 import 'package:taskflow/data/datasources/mock_json_data_source.dart';
 import 'package:taskflow/data/datasources/session_storage.dart';
 import 'package:taskflow/main.dart';
@@ -55,6 +56,7 @@ MockJsonDataSource createTestDataSource({
 List<Override> testOverrides({MockApiConfig config = MockApiConfig.instant}) {
   return [
     sessionStorageProvider.overrideWithValue(InMemorySessionStorage()),
+    localCacheProvider.overrideWithValue(InMemoryLocalCache()),
     mockApiConfigProvider.overrideWith(() => _FixedConfig(config)),
     mockJsonDataSourceProvider
         .overrideWithValue(createTestDataSource(config: config)),

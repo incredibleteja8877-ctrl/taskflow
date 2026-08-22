@@ -5,6 +5,7 @@ import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 
 import '../../core/error/app_exception.dart';
 import '../../core/network/mock_api_config.dart';
+import 'local_cache.dart';
 
 /// The only class in this application permitted to touch the asset bundle.
 ///
@@ -20,6 +21,7 @@ class MockJsonDataSource {
     this.config = const MockApiConfig(),
     AssetBundle? bundle,
     Random? random,
+    this._cache,
   })  : _bundle = bundle ?? rootBundle,
         _random = random ?? Random();
 
@@ -31,6 +33,10 @@ class MockJsonDataSource {
 
   final AssetBundle _bundle;
   final Random _random;
+
+  /// Where the last-known-good database snapshot lives. Optional so unit
+  /// tests can run without touching preferences.
+  final LocalCache? _cache;
 
   /// Caches the *future*, not the result, so two concurrent callers on a cold
   /// start share a single asset read instead of racing each other.
@@ -75,9 +81,10 @@ class MockJsonDataSource {
     String key,
     Map<String, dynamic> row,
   ) async {
-    await _simulateRoundTrip();
+    await _simulateRoundTrip(isWrite: true);
     final rows = await _liveCollection(key);
     rows.add(_copy(row));
+    await _persist();
     return _copy(row);
   }
 
@@ -87,7 +94,7 @@ class MockJsonDataSource {
     String id,
     Map<String, dynamic> changes,
   ) async {
-    await _simulateRoundTrip();
+    await _simulateRoundTrip(isWrite: true);
     _guardNotFoundMarker(id);
     final rows = await _liveCollection(key);
     final index = rows.indexWhere((row) => row['id'] == id);
@@ -95,12 +102,13 @@ class MockJsonDataSource {
       throw NotFoundException('No $key record with id "$id".');
     }
     rows[index] = {...rows[index], ...changes};
+    await _persist();
     return _copy(rows[index]);
   }
 
   /// Removes the row with this id.
   Future<void> delete(String key, String id) async {
-    await _simulateRoundTrip();
+    await _simulateRoundTrip(isWrite: true);
     _guardNotFoundMarker(id);
     final rows = await _liveCollection(key);
     final before = rows.length;
@@ -116,12 +124,43 @@ class MockJsonDataSource {
 
   // ------------------------------------------------------------- internals
 
-  Future<Map<String, dynamic>> _database() => _pending ??= _loadAsset();
+  Future<Map<String, dynamic>> _database() => _pending ??= _loadDatabase();
 
-  Future<Map<String, dynamic>> _loadAsset() async {
+  /// Offline, we serve the persisted snapshot. Online, we seed from the asset
+  /// and immediately snapshot it so the next offline launch has something to
+  /// show — Task 08's "persist last successfully loaded data locally".
+  Future<Map<String, dynamic>> _loadDatabase() async {
+    if (config.isOffline) {
+      final snapshot = await _cache?.read(LocalCache.snapshot);
+      if (snapshot is! Map) {
+        // Offline on a cold start with nothing cached. There is genuinely
+        // nothing to show, so say so rather than pretending.
+        throw const OfflineException(
+          'You are offline and no data has been saved yet.',
+        );
+      }
+      return Map<String, dynamic>.from(snapshot);
+    }
+
     final raw = await _bundle.loadString(assetPath);
-    return jsonDecode(raw) as Map<String, dynamic>;
+    final database = jsonDecode(raw) as Map<String, dynamic>;
+    await _cache?.write(LocalCache.snapshot, database);
+    return database;
   }
+
+  /// Snapshots the current database after a write, so a task created just now
+  /// is still there after going offline and relaunching.
+  Future<void> _persist() async {
+    final cache = _cache;
+    if (cache == null) return;
+    final database = await _database();
+    await cache.write(LocalCache.snapshot, database);
+  }
+
+  /// When the cache was last written. Drives the "showing data from …" line
+  /// in the offline banner.
+  Future<DateTime?> lastSyncedAt() =>
+      _cache?.writtenAt(LocalCache.snapshot) ?? Future.value();
 
   /// The real, mutable list inside the database — writes go here.
   /// Callers outside this class only ever receive copies.
@@ -154,9 +193,19 @@ class MockJsonDataSource {
   }
 
   /// The cost of a "network" call. Every public method pays it exactly once.
-  Future<void> _simulateRoundTrip() async {
+  ///
+  /// Offline behaviour is deliberately asymmetric, matching how a real
+  /// offline-first app behaves: reads fall back to the cached snapshot, but
+  /// writes fail, because there is nowhere to send them.
+  Future<void> _simulateRoundTrip({bool isWrite = false}) async {
     if (config.isOffline) {
-      throw const OfflineException();
+      if (isWrite) {
+        throw const OfflineException(
+          'You are offline. This change cannot be saved yet.',
+        );
+      }
+      // Reads continue, served from the snapshot by _loadDatabase.
+      return;
     }
     await _delay();
     if (config.forceTimeout) {

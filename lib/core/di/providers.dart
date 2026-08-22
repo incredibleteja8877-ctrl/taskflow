@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/datasources/local_cache.dart';
 import '../../data/datasources/mock_json_data_source.dart';
 import '../../data/datasources/session_storage.dart';
 import '../../data/repositories/auth_repository_impl.dart';
@@ -49,6 +50,7 @@ class MockApiConfigNotifier extends Notifier<MockApiConfig> {
 final mockJsonDataSourceProvider = Provider<MockJsonDataSource>((ref) {
   final dataSource = MockJsonDataSource(
     config: ref.read(mockApiConfigProvider),
+    cache: ref.watch(localCacheProvider),
   );
 
   ref.listen<MockApiConfig>(
@@ -66,6 +68,27 @@ final mockJsonDataSourceProvider = Provider<MockJsonDataSource>((ref) {
 /// that does not exist in a test process.
 final sessionStorageProvider = Provider<SessionStorage>(
   (ref) => SecureSessionStorage(),
+);
+
+/// Offline cache of the last successfully loaded data (Task 08).
+///
+/// Deliberately has no default: `main()` overrides it with a
+/// SharedPreferences-backed instance once the plugin is ready, and tests
+/// override it with [InMemoryLocalCache]. Throwing here means a missing
+/// override fails loudly at startup rather than silently disabling offline
+/// support.
+final localCacheProvider = Provider<LocalCache>(
+  (ref) => throw UnimplementedError(
+    'localCacheProvider must be overridden in main() or in tests',
+  ),
+);
+
+/// When the offline snapshot was last written.
+///
+/// Task 08: "Clearly indicate when displayed data may be stale." The offline
+/// banner shows this so the user knows how old what they are reading is.
+final lastSyncedAtProvider = FutureProvider<DateTime?>(
+  (ref) => ref.watch(mockJsonDataSourceProvider).lastSyncedAt(),
 );
 
 // --------------------------------------------------------------------------

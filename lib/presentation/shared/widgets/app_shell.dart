@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../core/di/providers.dart';
+import 'state_views.dart';
 
 /// Bottom-navigation shell around the four top-level destinations.
 ///
@@ -7,15 +11,32 @@ import 'package:go_router/go_router.dart';
 /// stack and scroll position — switching to Tasks and back to Projects does
 /// not reset where you were. Task 09: "proper navigation and back-navigation
 /// handling".
-class AppShell extends StatelessWidget {
+///
+/// It also hosts the offline banner, so the stale-data warning appears on
+/// every screen rather than being repeated in each one.
+class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isOffline = ref.watch(
+      mockApiConfigProvider.select((config) => config.isOffline),
+    );
+    final lastSynced = ref.watch(lastSyncedAtProvider).valueOrNull;
+
     return Scaffold(
-      body: navigationShell,
+      body: Column(
+        children: [
+          if (isOffline)
+            SafeArea(
+              bottom: false,
+              child: OfflineBanner(lastUpdated: lastSynced),
+            ),
+          Expanded(child: navigationShell),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: (index) => navigationShell.goBranch(

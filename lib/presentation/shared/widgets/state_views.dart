@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/error/app_exception.dart';
+import '../../../core/utils/formatters.dart';
 
 /// Full-screen spinner. Used while a first load is in flight.
 class LoadingView extends StatelessWidget {
@@ -202,7 +203,8 @@ class OfflineBanner extends StatelessWidget {
               child: Text(
                 lastUpdated == null
                     ? 'Offline — showing saved data.'
-                    : 'Offline — data may be out of date.',
+                    : 'Offline — showing data saved '
+                        '${Formatters.dateTime(lastUpdated)}.',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onTertiaryContainer),
               ),
